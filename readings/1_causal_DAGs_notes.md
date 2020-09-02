@@ -2,7 +2,9 @@
 ### 1. Understand what nodes and arrows in a causal DAG mean, and how you could draw a DAG for a simple situation
 
 - Nodes represent different variables and arrows represent the direction of causal effects. A -> B -> C: A is B's parent and B is A's child, C is A's desandant, A is C's ancestor. 
-- ?
+- *missing arrow*: strong assumption of no direct causal relations
+- *causal path*: paths points away from treatment to outcome (relative to a specific treatment and outcome)
+
 
 ### 2.Where does the causal DAG come from? Is it something we know, something we assume, or something we easily can estimate from data?
 
@@ -29,6 +31,14 @@
     - *A and B has no causal association but it appeared to be because of C*
     - example: ambition could cause stress as well as high achivement so it could appear that stress causes high achivement
     - need to condition on C to tease out the true relation between A and B
-3. Coliders/Selection Bias A -> C <- B
+3. Coliders/endogenous Selection A -> C <- B
     - do not include in the model
 
+### My questions from reading
+- still don't understand the discussion about error terms. P 249
+- problem with multiple testing in testable implications? 
+- what is the best way to do it in practice? decide on a DAG and stick with it or change your DAG when your assumptions fail?
+- adjustment criterion yields non-unique sets, what are the difference? trade offs?
+- lack of assumption with the NPSEM and the heterogeneity assumption how do you test the association between any given variables if there is no function form specification?
+- a concrete example of the d-Separation and testable implications would be nice
+ 
