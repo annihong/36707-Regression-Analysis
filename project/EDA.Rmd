@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
 library(gridExtra)
+require(ggdag)
 ```
 
 ## Basic Info:
@@ -20,10 +21,10 @@ team_dat <- read.csv("data/Team_Data_Raw.csv")
 
 
 ```{r echo=FALSE}
-# dim(indi_dat)
-# dim(team_dat)
-# summary(indi_dat)
-# summary(team_dat)
+dim(indi_dat)
+dim(team_dat)
+summary(indi_dat)
+summary(team_dat)
 ```
 ### Individual dataset  
 - The individual dataset contains 370 observations, and 10 variables :  
@@ -69,11 +70,33 @@ indi_dat <- indi_dat %>%
 #intermidiate step of calculating aggregated statistics by group
 agg_indi_dat <- indi_dat %>%
   group_by(team.id) %>%
-  summarise(mean_testo = mean(Testosterone), mean_log_testo = mean(log.testosterone), sd_testo = sd(Testosterone), sd_log_testo = sd(log.testosterone), mean_cortisol = mean(Cortisol), mean_log_cortisol = mean(log.cortisol), sd_cortisol = sd(Cortisol), sd_log_cortisol = sd(log.cortisol), diversity_score = n_distinct(Gender, Ethnicity, Country), team_size = n())
+  summarise(mean_testo = mean(Testosterone), mean_log_testo = mean(log.testosterone), sd_testo = sd(Testosterone), sd_log_testo = sd(log.testosterone), mean_cortisol = mean(Cortisol), mean_log_cortisol = mean(log.cortisol), sd_cortisol = sd(Cortisol), sd_log_cortisol = sd(log.cortisol), diversity_score = n_distinct(Gender, Ethnicity, Country), team_size = n(), mean_age = mean(Age))
 
 #combing the info from the individual dataset to the team dataset, average/sd cortisol and testosterone/sd levels are calculated 
 combo_dat <- team_dat %>%
-  inner_join(agg_indi_dat, by = "team.id")
+  inner_join(agg_indi_dat, by = "team.id") %>%
+  mutate(proportion_female = females/team.size)
+
+write_csv(combo_dat, "./data/combined_processed.csv")
+```
+
+## Causal DAG
+
+```{r}
+tidy_ggdag <- dagify(
+  Testostrone ~ Time + Gender + Age,
+  Cortisol ~ Time + Testostrone + Diversity,
+  Diversity ~ Size + Gender,
+  Performance ~ Testostrone + Cortisol + Diversity + Size + Age + Gender,
+  exposure = "Diversity",
+  outcome = "Performance"
+) %>% 
+  tidy_dagitty()
+
+ggdag(tidy_ggdag, node_size = 22, text_size = 2.2) +
+  theme_dag()
+
+
 ```
 
 ## Understanding the variables 
