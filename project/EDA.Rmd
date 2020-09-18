@@ -1,0 +1,183 @@
+---
+title: "EDA"
+author: "Anni Hong"
+date: "9/15/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+```
+
+## Basic Info:
+```{r echo=FALSE}
+indi_dat <- read.csv("data/Individual_Data_Raw.csv", header = T)
+team_dat <- read.csv("data/Team_Data_Raw.csv")
+```
+
+
+```{r echo=FALSE}
+# dim(indi_dat)
+# dim(team_dat)
+# summary(indi_dat)
+# summary(team_dat)
+```
+### Individual dataset  
+- The individual dataset contains 370 observations, and 10 variables :  
+  ID	Participant ID number
+  team.id	ID number of the team this participant belonged to
+  Age	Age, in years
+  Gender	Gender (Male or Female)
+  Ethnicity	Ethnicity of the participant
+  Cortisol	Participant's cortisol levels, nMol/L
+  Testosterone	Participant's testosterone levels, pg/mL
+  log.cortisol	Natural logarithm of the participant's cortisol level
+  log.testosterone	Natural logarithm of the participant's testosterone level
+  Country	Country of citizenship of the participant
+
+- 18 rows contain at least one missing value in one of the columns  
+
+### Team dataset  
+- The team dataset contains 74 teams and 14 variables:  
+team.id	Team ID number
+team.size	Number of people on the team
+final.performance	The team's final performance score
+time.of.day	The time of day the team's hormone sample was collected (hh.mm)
+females	Number of females in the group
+final.cash	Total cash earned by the team
+final.contracts	Total number of contracts won by the team
+final.reorders	Total number of reorders won by the team
+final.rank	Team's final rank at the end of the project, relative to other teams in their class section
+interim.performance	Same as above, but measured at Day 5 of the study (missing for some teams)
+interim.cash	
+interim.contracts	
+interim.reorders	
+interim.rank
+
+- 22 teams have no interim.rank, interim.reorders, interim.contracts, interim.cash,and interim.performance
+
+```{r data processing}
+#factorize certain variables and create diversity score for each group
+indi_dat <- indi_dat %>%
+  mutate_if(sapply(indi_dat, is.character), as.factor) %>%
+  group_by(team.id) %>%
+  mutate(diversity_score = n_distinct(Gender, Ethnicity, Country)) 
+
+#intermidiate step of calculating aggregated statistics by group
+agg_indi_dat <- indi_dat %>%
+  group_by(team.id) %>%
+  summarise(mean_testo = mean(Testosterone), mean_log_testo = mean(log.testosterone), sd_testo = sd(Testosterone), sd_log_testo = sd(log.testosterone), mean_cortisol = mean(Cortisol), mean_log_cortisol = mean(log.cortisol), sd_cortisol = sd(Cortisol), sd_log_cortisol = sd(log.cortisol), diversity_score = n_distinct(Gender, Ethnicity, Country), team_size = n())
+
+#combing the info from the individual dataset to the team dataset, average/sd cortisol and testosterone/sd levels are calculated 
+combo_dat <- team_dat %>%
+  inner_join(agg_indi_dat, by = "team.id")
+```
+
+## Understanding the variables 
+
+#Typical amount of diversity present: 
+```{r warning=FALSE}
+diversity_vars <- indi_dat %>% select(Gender, Ethnicity, Country)
+summary(diversity_vars[,-1])
+hist(combo_dat$diversity_score)
+```
+
+This dataset has a lot more men than women and mostly white Americans. There is a  adequate amount of variability in the diversity scores. 
+
+### testostreone vs log testostrone
+```{r}
+par(mfrow=c(1,2))
+sd_testo = round(sd(indi_dat$Testosterone, na.rm = T),2)
+sd_log_testo = round(sd(indi_dat$log.testosterone, na.rm = T),2)
+hist(indi_dat$Testosterone, breaks = 30, main = c("Testostreone, sd = ",sd_testo))
+hist(indi_dat$log.testosterone, breaks = 30, main = c("Log Testostreone", sd_log_testo))
+```
+
+```{r}
+par(mfrow=c(1,2))
+sd_testo = round(sd(agg_indi_dat$mean_testo, na.rm = T),2)
+sd_log_testo = round(sd(agg_indi_dat$mean_log_testo, na.rm = T),2)
+hist(agg_indi_dat$mean_testo, breaks = 30, main = c("Mean Group Testostreone, sd = ",sd_testo))
+hist(agg_indi_dat$mean_log_testo, breaks = 30, main = c("Mean Group Log Testostreone", sd_log_testo))
+```
+
+The above plots shows the histogram of the testostrone level compared to the log of the testostrone level, for overall as well as group mean. The log transformation helps with lessen the impact of outliers on our analysis. We don't want to let the group that contain the individual with really high testostrone level impact our analysis disproportionally since mean is very sensitive to outliers. The standard deviation is drastically reduced in the log transformed variable in both cases and the histogram approximate a normal distribution. 
+
+### testostrone, cortisol by gender
+```{r, warning=FALSE}
+testo <- indi_dat %>%
+  ggplot( aes(x=log.testosterone, fill=Gender)) +
+    geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
+    scale_fill_manual(values=c("#69b3a2", "#404080")) +
+    labs(fill="")
+
+cortisol <- indi_dat %>%
+  ggplot( aes(x=log.cortisol, fill=Gender)) +
+    geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
+    scale_fill_manual(values=c("#69b3a2", "#404080")) +
+    labs(fill="")
+
+grid.arrange(testo, cortisol)
+```
+
+It makes sense that gender is correlationed to the level of testostrone so special attention, since women tend to have lower testostrone level than men. Gender seem to have no impact on crotisol level. 
+### testostrone, cortisol by time of the day
+```{r, warning=FALSE}
+testo <- combo_dat %>%
+  ggplot(aes(x=time.of.day, y=mean_log_testo)) +
+    geom_point() 
+
+cortisol <- combo_dat %>%
+  ggplot(aes(x=time.of.day, y=mean_log_cortisol)) +
+    geom_point() 
+
+grid.arrange(testo, cortisol)
+```
+
+Time of the day could also be a confounder since the testostrone and cortisol level could change base on what time of the day you measure it. 
+
+
+## relationships between a subset of variables
+```{r}
+combo_dat_subset <- combo_dat %>% select(diversity_score,females, mean_log_cortisol, mean_log_testo,  final.cash, time.of.day, final.performance, team.size) 
+pairs(combo_dat_subset) # not including team id
+```
+
+- Worth noting that there are exactly 2 females in all the groups, if we want to control for gender it would make more sense to use percentage.   
+- Cortisol seems to be correlated with Testostrone levels, since Cortisol is related to stress maybe it will help test/explain why there could be an interaction effect between diversity and testostrone (through causing stress on the team).    
+```{r,  eval=FALSE, echo=FALSE}
+team_dat %>%
+  select(-one_of("team.id")) %>%
+  keep(is.numeric) %>%
+  gather() %>% 
+  ggplot(aes(value)) +                     # Plot the values
+    facet_wrap(~ key, scales = "free") +   # In separate panels
+    geom_histogram()
+
+indi_dat %>%
+  select(-one_of("team.id", "ID")) %>%
+  keep(is.numeric) %>%
+  gather() %>% 
+  ggplot(aes(value)) +                     # Plot the values
+    facet_wrap(~ key, scales = "free") +   # In separate panels
+    geom_histogram()
+
+indi_dat %>%
+  select(-one_of("team.id","ID")) %>%
+  keep(is.factor) %>%
+  gather() %>% 
+  ggplot(aes(value)) +                     # Plot the values
+    facet_wrap(~ key, scales = "free") +   # In separate panels
+    geom_histogram(stat = "count") 
+
+agg_indi_dat %>%
+  select(-one_of("team.id")) %>%
+  keep(is.numeric) %>%
+  gather() %>% 
+  ggplot(aes(value)) +                     # Plot the values
+    facet_wrap(~ key, scales = "free") +   # In separate panels
+    geom_histogram()
+```
