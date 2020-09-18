@@ -1,0 +1,66 @@
+---
+title: "0.2 Model Fitting"
+author: "Anni Hong"
+date: "9/17/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+require(ggdag)
+```
+
+```{r reading in processed data}
+combo_dat <- read.csv("./data/combined_processed.csv")
+summary(combo_dat)
+dim(combo_dat)
+
+combo_dat <- combo_dat %>% 
+  select(final.performance, mean_log_testo, diversity_score, proportion_female, mean_age, team.size, time.of.day, mean_log_cortisol) %>%
+  drop_na()
+
+
+
+summary(combo_dat)
+dim(combo_dat)
+```
+
+## Causal DAG
+TODO:
+- explain the DAG
+- introduce the variables I added and the variables of interests 
+- write out the stat model
+- do more testing with the residuals
+- do more analysis on cortisol
+- intepreting the results
+```{r}
+tidy_ggdag <- dagify(
+  Testostrone ~ Time + Gender + Age,
+  Cortisol ~ Time + Testostrone + Diversity,
+  Diversity ~ Size + Gender,
+  Performance ~ Testostrone + Cortisol + Diversity + Size + Age + Gender,
+  exposure = "Diversity",
+  outcome = "Performance"
+) %>% 
+  tidy_dagitty()
+
+ggdag(tidy_ggdag, node_size = 22, text_size = 2.2) +
+  theme_dag()
+```
+
+We are interested in the interaction effect of testostrone and diversity on final performance. The original researchers hypothesized that for the group with high testostrone would do worse with higher level of diversity whereas groups with lower testostrone would do better with higher levels of diversity. Therefore base off the DAG drawn above, we would need to condition on gender(calculated as the fraction of female in the group), age (average age of of the group) , Team size, and time of the day that the hormones are sampled. I also hypothesize that testostrone and diversity both have impacts on the cortisol level, maybe more conflicts will arise with higher level of testostrone and diversity, and stress (measured by cortisol) will have an impact on final performance. Thus I intend to test both models, with and without cortisol. 
+
+```{r}
+model_1 <- lm(data = combo_dat, final.performance ~ mean_log_testo + diversity_score + mean_log_testo*diversity_score + proportion_female + mean_age + team.size + time.of.day)
+summary(model_1)
+
+model_2 <- lm(data = combo_dat, final.performance ~ mean_log_testo + diversity_score + mean_log_testo*diversity_score + proportion_female + mean_age + team.size + time.of.day + mean_log_cortisol)
+summary(model_2)
+
+anova(model_1, model_2)
+
+residual_1 <- resid(model_1)
+```
+
