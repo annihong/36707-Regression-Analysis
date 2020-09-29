@@ -1,0 +1,147 @@
+---
+title: "HW4"
+author: "Anni Hong"
+date: "9/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(leaps)
+library(stats)
+library(caret)
+library(boot)
+```
+
+## Problem 2:
+
+```{r}
+dat <- read.table("https://web.stanford.edu/~hastie/ElemStatLearn/datasets/prostate.data", header = T)
+dat <- dat[,-which(colnames(dat) == "train")]
+y <- dat[,which(colnames(dat) == "lpsa")]
+X <- dat[,-which(colnames(dat) == "lpsa")]
+best_subset_res <- leaps::leaps(X,y, names = colnames(X))
+best_subset <- best_subset_res$which[which(best_subset_res$Cp == min(best_subset_res$Cp)),]
+best_subset_vars <- names(best_subset)[best_subset]
+formula_best_subset <- as.formula(paste("lpsa~", paste(best_subset_vars, collapse = "+"), sep = ""))
+model_best_subset <- lm(formula_best_subset, data = dat)
+summary(model_best_subset)
+summary(lm(lpsa~., data = dat))
+
+```
+
+```{r}
+stats::AIC(model_best_subset)
+stats::BIC(model_best_subset)
+```
+
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 5)
+# Train the model
+model <- train(formula_best_subset, data = dat, method = "lm",
+               trControl = train_control)
+# Summarize the results
+mean(model$resample$MAE)
+sd(model$resample$MAE)
+```
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 10)
+# Train the model
+model <- train(formula_best_subset, data = dat, method = "lm",
+               trControl = train_control)
+# Summarize the results
+mean(model$resample$MAE)
+sd(model$resample$MAE)
+```
+
+
+## problem 3
+
+You can also embed plots, for example:
+
+```{r}
+summary(psych_dat)
+psych_dat <- read.csv("study-1.csv", header = T)
+unrelated_vars <- c("quarterback", "potato", "when64", "diner", "female", "political", "bird")
+outcome_var <- "feelold"
+vars <- paste(unrelated_vars, collapse = "+")
+vars_sq <- paste("(", vars, ")^2")
+formula_interaction <- as.formula(paste(outcome_var, vars_sq, sep = "~"))
+formula <- as.formula(paste(outcome_var, vars, sep = "~"))
+summary(lm(formula_interaction, data = psych_dat))
+
+```
+#forward step selection
+```{r}
+fit_start <- lm(feelold ~ 1, data = psych_dat)
+step_forward <- step(fit_start, formula_interaction, direction="forward")
+summary(step_forward)
+```
+#subset
+```{r}
+model_matrix <- model.matrix(formula_interaction, data = psych_dat)
+feelold <- psych_dat$feelold
+
+subset <- regsubsets(formula_interaction, 
+                     data = psych_dat,
+                     nbest = 1,       # 1 best model for each number of predictors
+                    nvmax = NULL,    # NULL for no limit on number of variables
+                     force.in = NULL, force.out = NULL,
+                      method = "exhaustive")
+subset_res <- summary(subset)
+as.data.frame(subset_res$outmat)
+best_cp <- subset_res$which[which.min(subset_res$cp),][-1]
+#subset_res$which[which.max(subset_res$adjr2),] # should i use cp pr r^2?
+formula_post_subset <- paste(names(best_cp)[best_cp], collapse = "+")
+formula_post_subset <- as.formula(paste("feelold", formula_post_subset, sep = "~"))
+best_subset_lm <- lm(formula_post_subset, data = psych_dat)
+```
+
+### lasso 
+```{r}
+library(glmnet)
+cv_fit <- cv.glmnet(model_matrix, feelold)
+lasso <- coef(cv_fit, s = "lambda.min")
+non_zero_vars <- lasso@Dimnames[[1]][which(lasso != 0)][-1] #excluding the intercept
+formula_lasso <- paste(non_zero_vars, collapse = "+")
+formula_lasso <- as.formula(paste("feelold", formula_lasso, sep = "~"))
+best_lasso_lm <- lm(formula_lasso, data = psych_dat)
+```
+
+### getting test error best subset
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 5)
+# Train the model
+model <- train(formula_post_subset, data = psych_dat, method = "lm",
+               trControl = train_control)
+# Summarize the results
+mean(model$resample$MAE)
+sd(model$resample$MAE)
+```
+
+### getting test error stepwise
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 5)
+# Train the model
+model <- train(feelold ~ bird, data = psych_dat, method = "lm",
+               trControl = train_control)
+# Summarize the results
+mean(model$resample$MAE)
+sd(model$resample$MAE)
+```
+
+### getting test error lasso
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 5)
+# Train the model
+model <- train(formula_lasso, data = psych_dat, method = "lm",
+               trControl = train_control)
+# Summarize the results
+mean(model$resample$MAE)
+sd(model$resample$MAE)
+```
